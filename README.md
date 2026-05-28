@@ -1,2 +1,68 @@
-# postgresql-l2-backup-pitr-template
-Homework template for Vibe Learn lesson l2_backups_and_pitr
+        # postgresql — Бэкапы и PITR: pg_dump, pg_basebackup, WAL archiving, pgBackRest
+
+        Homework-шаблон для урока **l2_backups_and_pitr** (Бэкапы и PITR: pg_dump, pg_basebackup, WAL archiving, pgBackRest) на платформе Vibe Learn.
+
+        ## Что делать
+
+        Дано: testcontainers PG. Реализуй:
+1) Скрипт, запускающий pg_basebackup в tar + push в локальный MinIO (S3-compatible).
+2) archive_command, пушащий WAL-сегменты в MinIO.
+3) Сценарий PITR: пишем тестовые данные, "случайно" дропаем таблицу, восстанавливаемся
+   в момент до дропа в отдельный кластер, сравниваем чек-сумму.
+4) Автоматизированный verified restore: на CI еженочно восстанавливаем последний бэкап
+   и проверяем чек-сумму ключевых таблиц.
+Тесты в template проверят корректность PITR в произвольную секунду.
+
+## Контекст (из transfer-задачи урока)
+
+Тебя пригласили DBA в стартап. Текущая бэкап-стратегия:
+- `cron` каждые 24 часа запускает `pg_dump shop_prod | gzip > /backup/$(date).sql.gz`;
+- бэкапы хранятся на том же сервере, где БД;
+- последнее тестирование восстановления — год назад, успешно;
+- БД 850 ГБ, растёт на 5% в месяц;
+- jewelry бизнес, средний чек 200k₽, 50 заказов в час в пик;
+- управленцы говорят «у нас всё надёжно, у нас бэкапы есть».
+
+**Вопрос:** аудит ситуации. Что плохо? Какие риски? Спроектируй новую стратегию:
+что используешь, какой RPO/RTO целишь, как тестируешь. Какова стоимость в час downtime
+и сколько мы готовы платить за её снижение?
+
+## Recap из урока
+
+- **pg_dump = логический, pg_basebackup = физический.** Logical для small/medium и миграций, physical для big и как основа PITR.
+- **PITR = pg_basebackup + WAL archive.** Восстановись в любую секунду прошлого, не только в момент бэкапа.
+- **В проде ставь pgBackRest или WAL-G.** Самопальные скрипты с cp и tar — рецепт потерять данные в день инцидента.
+- **Бэкап без verified restore — fiction.** Минимум раз в месяц делай тестовое восстановление в отдельный кластер.
+- **Архив храни off-site (S3/GCS) с шифрованием.** Бэкап на той же машине что и БД — не защита.
+
+        ## Как работать
+
+        1. Платформа Vibe Learn создаёт копию этого репо в твоём GitHub-аккаунте по клику «Начать домашку» на странице урока (через GitHub `/generate`, codecrafters-pattern).
+        2. Склонируй копию локально, реализуй TODO в `main.py`, прогони тесты, запушь.
+        3. CI (`.github/workflows/ci.yml`) ставит зависимости и запускает `pytest` на каждый push. Платформа слушает результат через webhook от GitHub Actions и обновляет статус домашки на странице урока.
+
+        ## Локальное окружение
+
+        - Python 3.12+
+        - Docker + docker-compose — `docker compose up -d` поднимает single-node PostgreSQL 16 на `localhost:5432` с healthcheck. DSN: `postgresql://postgres:postgres@localhost:5432/postgres`. Переопределяется через env `DATABASE_URL`.
+
+        ## Запуск
+
+        ```bash
+        # Поднять локальный PostgreSQL
+        docker compose up -d
+
+        # Установить зависимости
+        pip install -r requirements.txt
+
+        # Прогнать тесты (интеграционный включается через PG_INTEGRATION=1)
+        pytest
+        PG_INTEGRATION=1 pytest
+
+        # Запустить main (печатает marker; замени stub на реализацию)
+        python main.py
+        ```
+
+        ## Заметка автора
+
+        Это baseline-шаблон, сгенерированный платформой. Бизнес-сущность задачи (что конкретно реализовать в `main.py`, какие тесты сделать строгими) расширяется по ходу итераций — параллельно с углублением теории урока.
